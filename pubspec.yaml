@@ -19,6 +19,7 @@ dependencies:
   video_player: ^2.9.2
   just_audio: ^0.9.40
   shared_preferences: ^2.3.2
+  flutter_overlay_window: ^0.4.4  # <-- WAJIB ADA INI
 
 flutter:
   uses-material-design: true
