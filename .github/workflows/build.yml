@@ -21,8 +21,34 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0' # <--- KUNCI UTAMANYA DI SINI
+          flutter-version: '3.22.0'
           channel: 'stable'
+
+      - name: Auto-Fix Android Folder
+        run: |
+          # 1. Backup file kustom kita
+          mkdir -p /tmp/backup
+          cp android/app/src/main/AndroidManifest.xml /tmp/backup/
+          cp -r android/app/src/main/kotlin/com/yanz/cheat /tmp/backup/cheat_kt
+          cp android/app/src/main/res/xml/device_admin.xml /tmp/backup/ 2>/dev/null || true
+          
+          # 2. Hancurkan folder android lama
+          rm -rf android
+          
+          # 3. Generate folder android baru yang modern
+          flutter create --platforms=android --org com.yanz .
+          
+          # 4. Kembalikan file kustom kita ke folder baru
+          cp /tmp/backup/AndroidManifest.xml android/app/src/main/
+          mkdir -p android/app/src/main/kotlin/com/yanz/cheat
+          cp /tmp/backup/cheat_kt/*.kt android/app/src/main/kotlin/com/yanz/cheat/
+          mkdir -p android/app/src/main/res/xml
+          cp /tmp/backup/device_admin.xml android/app/src/main/res/xml/ 2>/dev/null || true
+          
+          # 5. Perbaiki nama package biar sesuai
+          sed -i 's/namespace ".*"/namespace "com.yanz.cheat"/g' android/app/build.gradle
+          sed -i 's/applicationId ".*"/applicationId "com.yanz.cheat"/g' android/app/build.gradle
+          sed -i 's/android:name="io.flutter.app.FlutterApplication"/android:name="${applicationName}"/g' android/app/src/main/AndroidManifest.xml
 
       - name: Flutter Pub Get
         run: flutter pub get
