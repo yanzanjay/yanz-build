@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui'; // <--- INI YANG KURANG TADI
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:http/http.dart' as http;
