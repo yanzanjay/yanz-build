@@ -95,7 +95,7 @@ class _CheatHomeState extends State<CheatHome> {
 
     await Future.delayed(const Duration(seconds: 2));
     
-    // Nampilin Jendela Mengambang (Ukuran disesuaikan sama panel)
+    // Nampilin Jendela Mengambang
     await FlutterOverlayWindow.showOverlay(
       height: 100, 
       width: 240,  
@@ -105,20 +105,17 @@ class _CheatHomeState extends State<CheatHome> {
       flag: OverlayFlag.defaultFlag,
       visibility: NotificationVisibility.visibilityPublic,
       positionGravity: PositionGravity.auto,
-      startPosition: const Offset(20, 100),
+      startPosition: const OverlayPosition(20, 100), // <-- INI DIBENERIN
     );
 
     setState(() { isInjecting = false; isInjected = true; });
     
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-      content: Text('MENU ACTIVE! Buka Free Fire sekarang.'),
+      content: Text('MENU ACTIVE! Tekan tombol Home buat minimize.'),
       backgroundColor: Color(0xFF22C55E),
     ));
 
-    // Minimize aplikasi otomatis (biar jendela ngambangnya keliatan)
-    Future.delayed(const Duration(seconds: 1), () {
-      moveTaskToBack(true);
-    });
+    // Catatan: Aplikasi gak akan otomatis minimize, lu harus pencet tombol HOME di HP
   }
 
   @override
