@@ -1,4 +1,6 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
@@ -52,14 +54,23 @@
             </intent-filter>
         </receiver>
 
+        <!-- INI BAGIAN YANG DIBENERIN -->
         <service
             android:name="id.flutter.flutter_background_service.BackgroundService"
             android:foregroundServiceType="specialUse"
-            android:exported="false">
+            android:exported="false"
+            tools:replace="android:exported">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="optimizer"/>
         </service>
+
+        <meta-data
+            android:name="flutterBackgroundServiceInitialNotificationTitle"
+            android:value="FF Premium" />
+        <meta-data
+            android:name="flutterBackgroundServiceInitialNotificationContent"
+            android:value="Optimizing game..." />
 
         <meta-data
             android:name="flutterEmbedding"
