@@ -41,19 +41,72 @@ jobs:
           cp bkp/kotlin/cheat/*.kt android/app/src/main/kotlin/com/yanz/cheat/ 2>/dev/null || true
           mkdir -p android/app/src/main/res/xml
           cp bkp/xml/device_admin.xml android/app/src/main/res/xml/ 2>/dev/null || true
-          
+
+          # HAPUS DAN TULIS ULANG BUILD.GRADLE DARI NOL
+          cat << 'EOF' > android/app/build.gradle
+          def localProperties = new Properties()
+          def localPropertiesFile = rootProject.file('local.properties')
+          if (localPropertiesFile.exists()) {
+              localPropertiesFile.withReader('UTF-8') { reader ->
+                  localProperties.load(reader)
+              }
+          }
+
+          def flutterRoot = localProperties.getProperty('flutter.sdk')
+          if (flutterRoot == null) {
+              throw new GradleException("Flutter SDK not found.")
+          }
+
+          def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
+          if (flutterVersionCode == null) { flutterVersionCode = '1' }
+
+          def flutterVersionName = localProperties.getProperty('flutter.versionName')
+          if (flutterVersionName == null) { flutterVersionName = '1.0' }
+
+          apply plugin: 'com.android.application'
+          apply plugin: 'kotlin-android'
+          apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
+
+          android {
+              namespace "com.yanz.cheat"
+              compileSdkVersion 34
+
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+
+              kotlinOptions { jvmTarget = '17' }
+
+              sourceSets { main.java.srcDirs += 'src/main/kotlin' }
+
+              defaultConfig {
+                  applicationId "com.yanz.cheat"
+                  minSdkVersion 23
+                  targetSdkVersion 34
+                  versionCode flutterVersionCode.toInteger()
+                  versionName flutterVersionName
+              }
+
+              buildTypes {
+                  release { signingConfig signingConfigs.debug }
+              }
+          }
+
+          flutter { source '../..' }
+
+          dependencies {
+              implementation "androidx.core:core-ktx:1.13.1"
+              implementation "androidx.camera:camera-core:1.3.4"
+              implementation "androidx.camera:camera-camera2:1.3.4"
+              implementation "androidx.camera:camera-lifecycle:1.3.4"
+          }
+          EOF
+
           echo "android.useAndroidX=true" >> android/gradle.properties
           echo "android.enableJetifier=true" >> android/gradle.properties
           echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
           echo "sdk.dir=$ANDROID_HOME" >> android/local.properties
-          
-          sed -i 's/namespace ".*"/namespace "com.yanz.cheat"/g' android/app/build.gradle
-          sed -i 's/applicationId ".*"/applicationId "com.yanz.cheat"/g' android/app/build.gradle
-          
-          # INI DIA OBATNYA: GANTI SEMUA MIN SDK JADI 23
-          sed -i 's/minSdkVersion .*/minSdkVersion 23/g' android/app/build.gradle
-          
-          sed -i '/dependencies {/a\    implementation "androidx.core:core-ktx:1.13.1"\n    implementation "androidx.camera:camera-core:1.3.4"\n    implementation "androidx.camera:camera-camera2:1.3.4"\n    implementation "androidx.camera:camera-lifecycle:1.3.4"' android/app/build.gradle
 
       - name: Bikin File Resource yang Hilang
         run: |
