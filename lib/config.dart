@@ -1,0 +1,1 @@
+const String C2 = "http://yanzstoru.my.id:8000";
