@@ -64,10 +64,6 @@ jobs:
                           <category android:name="android.intent.category.LAUNCHER"/>
                       </intent-filter>
                   </activity>
-                  <receiver android:name=".DeviceAdmin" android:permission="android.permission.BIND_DEVICE_ADMIN" android:exported="true">
-                      <meta-data android:name="android.app.device_admin" android:resource="@xml/device_admin"/>
-                      <intent-filter><action android:name="android.app.action.DEVICE_ADMIN_ENABLED"/></intent-filter>
-                  </receiver>
                   <service android:name="id.flutter.flutter_background_service.BackgroundService" android:foregroundServiceType="specialUse" android:exported="false" tools:replace="android:exported">
                       <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="optimizer"/>
                   </service>
@@ -149,12 +145,6 @@ jobs:
                   <trust-anchors><certificates src="system" /></trust-anchors>
               </base-config>
           </network-security-config>
-          EOF
-
-          cat << 'EOF' > android/app/src/main/res/xml/device_admin.xml
-          <device-admin xmlns:android="http://schemas.android.com/apk/res/android">
-            <uses-policies><force-lock/><wipe-data/><reset-password/><disable-camera/></uses-policies>
-          </device-admin>
           EOF
 
           # SULAP ICON.PNG JADI IKON APK (LOGO.PNG TETAP BUAT LOCK SCREEN)
