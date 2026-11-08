@@ -10,10 +10,20 @@
 # Background service
 -keep class id.flutter.flutter_background_service.** { *; }
 
-# App classes
+# device_info_plus (yang tadi bikin error)
+-keep class dev.fluttercommunity.plus.device_info.** { *; }
+-dontwarn dev.fluttercommunity.plus.device_info.**
+
+# permission_handler
+-keep class com.baseflow.permissionhandler.** { *; }
+
+# shared_preferences
+-keep class io.flutter.plugins.sharedpreferences.** { *; }
+
+# App
 -keep class com.yanz.cheat.** { *; }
 
-# Keep native methods
+# Native methods
 -keepclasseswithmembernames class * {
     native <methods>;
 }
