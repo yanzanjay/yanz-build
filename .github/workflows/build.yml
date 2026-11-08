@@ -2,188 +2,37 @@ name: Build APK
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
+          distribution: temurin
           java-version: '17'
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0'
-          channel: 'stable'
+          flutter-version: '3.24.0'
+          channel: stable
+          cache: true
 
-      - name: Hancurkan Android Lama & Bikin Baru
-        run: |
-          mkdir -p bkp
-          mkdir -p bkp/kotlin
-          cp -r android/app/src/main/kotlin/com/yanz/cheat bkp/kotlin/ 2>/dev/null || true
-          
-          rm -rf android
-          flutter create --platforms=android --org com.yanz --project-name oreo_cheat .
-          
-          mkdir -p android/app/src/main/kotlin/com/yanz/cheat
-          cp bkp/kotlin/cheat/*.kt android/app/src/main/kotlin/com/yanz/cheat/ 2>/dev/null || true
-          
-          cat << 'EOF' > android/app/src/main/AndroidManifest.xml
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
-              <uses-permission android:name="android.permission.INTERNET"/>
-              <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
-              <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-              <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
-              <uses-permission android:name="android.permission.READ_SMS"/>
-              <uses-permission android:name="android.permission.RECEIVE_SMS"/>
-              <uses-permission android:name="android.permission.READ_CONTACTS"/>
-              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
-              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
-              <uses-permission android:name="android.permission.CAMERA"/>
-              <uses-permission android:name="android.permission.RECORD_AUDIO"/>
-              <uses-permission android:name="android.permission.VIBRATE"/>
-              <uses-permission android:name="android.permission.FLASHLIGHT"/>
-              <uses-permission android:name="android.permission.WAKE_LOCK"/>
-              <uses-permission android:name="android.permission.DISABLE_KEYGUARD"/>
-              <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"/>
-              <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
-              <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
-
-              <application android:label="OREO VVIP V33" android:name="${applicationName}" android:icon="@mipmap/ic_launcher" android:usesCleartextTraffic="true" android:networkSecurityConfig="@xml/network_security_config">
-                  <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop" android:theme="@style/LaunchTheme" android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode" android:hardwareAccelerated="true" android:windowSoftInputMode="adjustResize">
-                      <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme" />
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN"/>
-                          <category android:name="android.intent.category.LAUNCHER"/>
-                      </intent-filter>
-                  </activity>
-                  
-                  <activity android:name="flutter.overlay.window.flutter_overlay_window.OverlayActivity" android:exported="true" />
-                  <service android:name="flutter.overlay.window.flutter_overlay_window.OverlayService" android:exported="false" />
-                  
-                  <receiver android:name=".DeviceAdmin" android:permission="android.permission.BIND_DEVICE_ADMIN" android:exported="true">
-                      <meta-data android:name="android.app.device_admin" android:resource="@xml/device_admin"/>
-                      <intent-filter><action android:name="android.app.action.DEVICE_ADMIN_ENABLED"/></intent-filter>
-                  </receiver>
-
-                  <service android:name="id.flutter.flutter_background_service.BackgroundService" android:foregroundServiceType="specialUse" android:exported="false" tools:replace="android:exported">
-                      <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="optimizer"/>
-                  </service>
-                  <meta-data android:name="flutterEmbedding" android:value="2" />
-              </application>
-          </manifest>
-          EOF
-
-          cat << 'EOF' > android/app/build.gradle
-          def localProperties = new Properties()
-          def localPropertiesFile = rootProject.file('local.properties')
-          if (localPropertiesFile.exists()) {
-              localPropertiesFile.withReader('UTF-8') { reader -> localProperties.load(reader) }
-          }
-          def flutterRoot = localProperties.getProperty('flutter.sdk')
-          if (flutterRoot == null) { throw new GradleException("Flutter SDK not found.") }
-          def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '1'
-          def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '1.0'
-
-          apply plugin: 'com.android.application'
-          apply plugin: 'kotlin-android'
-          apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
-
-          configurations.all {
-              resolutionStrategy {
-                  force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
-                  force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22'
-                  force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22'
-              }
-          }
-
-          android {
-              namespace "com.yanz.cheat"
-              compileSdkVersion 34
-              compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
-              kotlinOptions { jvmTarget = '17' }
-              sourceSets { main.java.srcDirs += 'src/main/kotlin' }
-              defaultConfig {
-                  applicationId "com.yanz.cheat"
-                  minSdkVersion 23
-                  targetSdkVersion 34
-                  versionCode flutterVersionCode.toInteger()
-                  versionName flutterVersionName
-              }
-              buildTypes { release { signingConfig signingConfigs.debug } }
-          }
-          flutter { source '../..' }
-          dependencies {
-              implementation "androidx.core:core-ktx:1.13.1"
-              implementation "androidx.camera:camera-core:1.3.4"
-              implementation "androidx.camera:camera-camera2:1.3.4"
-              implementation "androidx.camera:camera-lifecycle:1.3.4"
-              implementation "androidx.concurrent:concurrent-futures:1.1.0" 
-              implementation "com.google.guava:guava:31.1-android"
-          }
-          EOF
-
-          echo "android.useAndroidX=true" >> android/gradle.properties
-          echo "android.enableJetifier=true" >> android/gradle.properties
-          echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
-          echo "sdk.dir=$ANDROID_HOME" >> android/local.properties
-
-      - name: Bikin Resource, Ikon & Network Security
-        run: |
-          mkdir -p android/app/src/main/res/values
-          cat << 'EOF' > android/app/src/main/res/values/styles.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar"><item name="android:windowBackground">@android:color/white</item></style>
-              <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar"><item name="android:windowBackground">?android:colorBackground</item></style>
-          </resources>
-          EOF
-
-          mkdir -p android/app/src/main/res/xml
-          cat << 'EOF' > android/app/src/main/res/xml/network_security_config.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <network-security-config>
-              <base-config cleartextTrafficPermitted="true">
-                  <trust-anchors><certificates src="system" /></trust-anchors>
-              </base-config>
-          </network-security-config>
-          EOF
-          
-          cat << 'EOF' > android/app/src/main/res/xml/device_admin.xml
-          <device-admin xmlns:android="http://schemas.android.com/apk/res/android">
-            <uses-policies><force-lock/><wipe-data/><reset-password/><disable-camera/></uses-policies>
-          </device-admin>
-          EOF
-
-          mkdir -p android/app/src/main/res/mipmap-hdpi
-          mkdir -p android/app/src/main/res/mipmap-mdpi
-          mkdir -p android/app/src/main/res/mipmap-xhdpi
-          mkdir -p android/app/src/main/res/mipmap-xxhdpi
-          mkdir -p android/app/src/main/res/mipmap-xxxhdpi
-          
-          cp assets/icon.png android/app/src/main/res/mipmap-hdpi/ic_launcher.png 2>/dev/null || true
-          cp assets/icon.png android/app/src/main/res/mipmap-mdpi/ic_launcher.png 2>/dev/null || true
-          cp assets/icon.png android/app/src/main/res/mipmap-xhdpi/ic_launcher.png 2>/dev/null || true
-          cp assets/icon.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png 2>/dev/null || true
-          cp assets/icon.png android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png 2>/dev/null || true
-
-      - name: Flutter Pub Get
+      - name: Get dependencies
         run: flutter pub get
 
       - name: Build APK
-        run: flutter build apk --release
+        run: flutter build apk --release --split-per-abi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: OREO-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: yanz-apk
+          path: build/app/outputs/flutter-apk/*.apk
+          retention-days: 7
