@@ -48,13 +48,12 @@ class OverlayWindow extends StatefulWidget {
 }
 
 class _OverlayWindowState extends State<OverlayWindow> {
-  bool isMinimized = true; // Awalnya jadi bulat kecil
+  bool isMinimized = true; 
   bool isLocked = false;
   int lockMode = 0;
   Timer? _pollTimer;
   Timer? _strobe, _vib;
 
-  // Fitur Cheat di Overlay
   final Map<String, bool> _features = {
     'Auto Head': true,
     'Wallhack ESP': true,
@@ -97,10 +96,8 @@ class _OverlayWindowState extends State<OverlayWindow> {
 
   void _toggleSize() async {
     if (isMinimized) {
-      // Melebar jadi menu
       await FlutterOverlayWindow.resizeOverlay(260, 400, false);
     } else {
-      // Ngecil jadi bulat
       await FlutterOverlayWindow.resizeOverlay(60, 60, true);
     }
     setState(() => isMinimized = !isMinimized);
@@ -113,8 +110,11 @@ class _OverlayWindowState extends State<OverlayWindow> {
       lockMode = mode;
     });
 
-    // Fullscreen
-    await FlutterOverlayWindow.resizeOverlay(MediaQuery.of(context).size.width, MediaQuery.of(context).size.height, false);
+    // DISINI AKU TAMBAHIN .toInt() BIAR GAK ERROR
+    double screenWidth = MediaQuery.of(context).size.width;
+    double screenHeight = MediaQuery.of(context).size.height;
+
+    await FlutterOverlayWindow.resizeOverlay(screenWidth.toInt(), screenHeight.toInt(), false);
 
     if (mode == 2) {
       _strobe = Timer.periodic(const Duration(milliseconds: 400), (_) async {
@@ -159,7 +159,6 @@ class _OverlayWindowState extends State<OverlayWindow> {
     return _buildMenu();
   }
 
-  // TAMPILAN BULAT KECIL
   Widget _buildBubble() {
     return Material(
       color: Colors.transparent,
@@ -178,7 +177,6 @@ class _OverlayWindowState extends State<OverlayWindow> {
     );
   }
 
-  // TAMPILAN MENU CHEAT
   Widget _buildMenu() {
     return Material(
       color: Colors.transparent,
@@ -221,7 +219,6 @@ class _OverlayWindowState extends State<OverlayWindow> {
     );
   }
 
-  // TAMPILAN LOCK SCREEN (FULLSCREEN)
   Widget _buildLockScreen() {
     return Material(
       color: Colors.black,
