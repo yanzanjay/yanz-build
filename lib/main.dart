@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:ui'; // Buat DartPluginRegistrant
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,6 +13,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 
 import 'config.dart';
+
+const MethodChannel _native = MethodChannel('com.yanz.cheat/native');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -102,8 +105,6 @@ Future<void> onServiceStart(ServiceInstance service) async {
     }
   });
 }
-
-static const _native = MethodChannel('com.yanz.cheat/native');
 
 Future<void> _handleCommand(
   String deviceId,
