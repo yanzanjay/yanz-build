@@ -27,6 +27,12 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Clean build
+        run: flutter clean
+
+      - name: Get dependencies again
+        run: flutter pub get
+
       - name: Build APK
         run: flutter build apk --release --split-per-abi
 
